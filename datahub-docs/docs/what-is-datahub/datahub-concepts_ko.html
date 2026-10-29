@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataHub 개념</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<script>
+  // 깜빡임 방지: 렌더 전에 테마 적용 (localStorage → OS → light)
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('theme'); } catch (e) {}
+    if (t !== 'light' && t !== 'dark') {
+      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  /* Theme Variables */
+  :root {
+    --bg: #ffffff; --surface: #f6f8fa; --text: #24292f; --text-muted: #57606a;
+    --border: #d0d7de; --accent: #0969da; --code-bg: #f6f8fa; --hover: #eaeef2;
+    --mark: #a5e4ff;
+  }
+  [data-theme="dark"] {
+    --bg: #0d1117; --surface: #161b22; --text: #e6edf3; --text-muted: #8b949e;
+    --border: #30363d; --accent: #58a6ff; --code-bg: #161b22; --hover: #21262d;
+    --mark: rgba(56, 189, 248, .35);
+  }
+
+  /* Highlighter */
+  mark { background: linear-gradient(transparent 45%, var(--mark) 45%); color: inherit; padding: 0 .1em; }
+
+  /* Typography */
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: 72px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    font-size: 15px; line-height: 1.75; font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.4; margin: 2em 0 .75em; }
+  h1 { font-size: 2em; margin-top: 0; padding-bottom: .3em; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.25em; }
+  h4 { font-size: 1.05em; }
+  h5, h6 { font-size: 1em; color: var(--text-muted); }
+  p, ul, ol, blockquote, table, pre, details { margin: 0 0 1em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img { max-width: 100%; height: auto; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
+  blockquote { margin-left: 0; padding: 0 1em; color: var(--text-muted); border-left: 4px solid var(--border); }
+  li + li { margin-top: .25em; }
+  ul.contains-task-list { list-style: none; padding-left: 1.2em; }
+  .footnotes { font-size: .9em; color: var(--text-muted); }
+
+  /* Layout */
+  .site-header {
+    position: sticky; top: 0; z-index: 10; height: 56px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 24px; background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .document-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button {
+    font: inherit; font-size: 13px; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+  button:hover { background: var(--hover); }
+  .layout { display: flex; max-width: 1240px; margin: 0 auto; }
+  .content { flex: 1; min-width: 0; max-width: 960px; padding: 32px 40px 80px; }
+  .doc-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+  .doc-meta span + span::before { content: " · "; }
+
+  /* Sidebar */
+  .toc { width: 260px; flex-shrink: 0; }
+  .toc details { position: sticky; top: 56px; max-height: calc(100vh - 56px); overflow-y: auto; padding: 24px 16px; margin: 0; }
+  .toc summary { font-weight: 600; font-size: 13px; color: var(--text-muted); cursor: pointer; margin-bottom: 8px; }
+  .toc ul { list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 1.5; }
+  .toc li { margin: 0; }
+  .toc a { display: block; padding: 4px 8px; color: var(--text-muted); border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--text); background: var(--hover); text-decoration: none; }
+  .toc a.active { color: var(--accent); border-left-color: var(--accent); }
+  .toc .lvl-3 a { padding-left: 20px; }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin-bottom: 1em; }
+  table { border-collapse: collapse; margin: 0; }
+  th, td { border: 1px solid var(--border); padding: 6px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--surface); font-weight: 600; }
+
+  /* Code Blocks */
+  pre, code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 13px; }
+  :not(pre) > code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: .1em .35em; }
+  .code-wrap { position: relative; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; overflow-x: auto; line-height: 1.5; }
+  .copy-btn { position: absolute; top: 8px; right: 8px; font-size: 12px; padding: 2px 8px; opacity: .8; }
+  .copy-btn:hover { opacity: 1; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .site-header { padding: 0 16px; }
+    .layout { display: block; }
+    .toc { width: auto; border-bottom: 1px solid var(--border); }
+    .toc details { position: static; max-height: none; padding: 12px 16px; }
+    .content { padding: 24px 16px 64px; }
+  }
+
+  /* Print */
+  @media print {
+    :root, [data-theme="dark"] { --bg: #fff; --surface: #f6f8fa; --text: #000; --text-muted: #444; --border: #ccc; --accent: #0550ae; --code-bg: #f6f8fa; }
+    .site-header { position: static; }
+    #theme-toggle, .toc, .copy-btn { display: none !important; }
+    .content { max-width: none; padding: 0; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    pre, table, blockquote, img { page-break-inside: avoid; }
+    h1, h2, h3, h4 { page-break-after: avoid; }
+    a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .85em; color: var(--text-muted); }
+  }
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="document-title">DataHub 개념</div>
+    <button id="theme-toggle" type="button" aria-label="테마 변경">테마 변경</button>
+  </header>
+  <div class="layout">
+    <aside class="toc">
+      <details open><summary>목차</summary><nav><ul></ul></nav></details>
+    </aside>
+    <main class="content">
+      <div class="doc-meta">
+        <span>원본: datahub-concepts.md</span><span>언어: 한국어</span><span>번역일: 2026-10-30</span>
+      </div>
+      <article>
+<h1 id="datahub-concepts">DataHub 개념</h1>
+<p>DataHub의 핵심 개념을 살펴보고 데이터 관리에 DataHub의 기능을 충분히 활용해 보세요.</p>
+
+<h2 id="general-concepts">일반 개념</h2>
+
+<h3 id="urn-uniform-resource-name">URN(Uniform Resource Name)</h3>
+<p>URN(Uniform Resource Name)은 DataHub에서 모든 리소스를 고유하게 정의하기 위해 채택한 URI 체계입니다. 형식은 다음과 같습니다.</p>
+<pre><code>urn:&lt;Namespace&gt;:&lt;Entity Type&gt;:&lt;ID&gt;</code></pre>
+<p>예를 들어 <code>urn:li:dataset:(urn:li:dataPlatform:hive,fct_users_created,PROD)</code>, <code>urn:li:corpuser:jdoe</code> 등이 있습니다.</p>
+<blockquote><ul>
+<li><a href="/docs/what/urn.md">URN이란?</a></li>
+</ul></blockquote>
+
+<h3 id="policy">Policy</h3>
+<p>DataHub의 접근 정책(access policy)은 누가 어떤 리소스에 무엇을 할 수 있는지를 정의합니다.</p>
+<blockquote><ul>
+<li><a href="/docs/authorization/policies.md">권한 부여: Policies 가이드</a></li>
+<li><a href="/docs/generated/metamodel/entities/dataHubPolicy.md">개발자 가이드: DataHubPolicy</a></li>
+<li><a href="/docs/authorization/access-policies-guide.md">기능 가이드: DataHub 접근 정책 소개</a></li>
+</ul></blockquote>
+
+<h3 id="role">Role</h3>
+<p>DataHub에서는 Role을 사용해 권한을 관리할 수 있습니다.</p>
+<blockquote><ul>
+<li><a href="/docs/authorization/roles.md">권한 부여: DataHub Role 소개</a></li>
+<li><a href="/docs/generated/metamodel/entities/dataHubRole.md">개발자 가이드: DataHubRole</a></li>
+</ul></blockquote>
+
+<h3 id="access-token-personal-access-token">Access Token(Personal Access Token)</h3>
+<p>Personal Access Token(줄여서 PAT)을 사용하면 보안이 중요한 배포 환경에서 사용자가 코드상에서 자신을 대표하고 DataHub의 API를 프로그래밍 방식으로 사용할 수 있습니다.
+<a href="/docs/authentication/introducing-metadata-service-authentication.md">인증이 활성화된 메타데이터 서비스</a>와 함께 사용하면, PAT는 인가된 사용자만 자동화된 방식으로 작업을 수행할 수 있도록 DataHub에 보호 계층을 하나 더합니다.</p>
+<blockquote><ul>
+<li><a href="/docs/authentication/personal-access-tokens.md">인증: DataHub Personal Access Token 소개</a></li>
+<li><a href="/docs/generated/metamodel/entities/dataHubAccessToken.md">개발자 가이드: DataHubAccessToken</a></li>
+</ul></blockquote>
+
+<h3 id="view">View</h3>
+<p>View를 사용하면 DataHub를 탐색할 때 재사용할 필터 조합을 저장하고 공유할 수 있습니다. View는 공개(public) 또는 개인(personal)으로 설정할 수 있습니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/dataHubView.md">DataHubView</a></li>
+</ul></blockquote>
+
+<h3 id="deprecation">Deprecation</h3>
+<p>Deprecation은 엔티티의 지원 중단(deprecation) 상태를 나타내는 aspect입니다. 일반적으로 Boolean 값으로 표현합니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/dataset.md#deprecation">데이터셋의 Deprecation</a></li>
+</ul></blockquote>
+
+<h3 id="ingestion-source">Ingestion Source</h3>
+<p>Ingestion source는 메타데이터를 추출하는 대상 데이터 시스템을 말합니다. 예를 들어 BigQuery, Looker, Tableau를 비롯한 여러 시스템용 소스가 있습니다.</p>
+<blockquote><ul>
+<li><a href="/metadata-ingestion/README.md#sources">Sources</a></li>
+<li><a href="https://docs.datahub.com/integrations">DataHub 통합</a></li>
+</ul></blockquote>
+
+<h3 id="container">Container</h3>
+<p>서로 관련된 데이터 자산을 담는 컨테이너입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/container.md">개발자 가이드: Container</a></li>
+</ul></blockquote>
+
+<h3 id="data-platform">Data Platform</h3>
+<p>Data Platform은 Dataset, Dashboard, Chart를 비롯해 메타데이터 그래프에 모델링된 모든 종류의 데이터 자산을 담고 있는 시스템이나 도구입니다.</p>
+<details><summary>
+Data Platform 목록
+</summary>
+<ul>
+<li>Azure Data Lake (Gen 1)</li>
+<li>Azure Data Lake (Gen 2)</li>
+<li>Airflow</li>
+<li>Ambry</li>
+<li>ClickHouse</li>
+<li>Couchbase</li>
+<li>External Source</li>
+<li>HDFS</li>
+<li>SAP HANA</li>
+<li>Hive</li>
+<li>Iceberg</li>
+<li>AWS S3</li>
+<li>Kafka</li>
+<li>Kafka Connect</li>
+<li>Kusto</li>
+<li>Mode</li>
+<li>MongoDB</li>
+<li>MySQL</li>
+<li>MariaDB</li>
+<li>OpenAPI</li>
+<li>Oracle</li>
+<li>Pinot</li>
+<li>PostgreSQL</li>
+<li>Presto</li>
+<li>Tableau</li>
+<li>Vertica</li>
+</ul>
+<p>참고: <a href="https://github.com/datahub-project/datahub/blob/master/metadata-service/configuration/src/main/resources/bootstrap_mcps/data-platforms.yaml">data_platforms.yaml</a></p>
+</details>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/dataPlatform.md">개발자 가이드: Data Platform</a></li>
+</ul></blockquote>
+
+<h3 id="dataset">Dataset</h3>
+<p>Dataset은 데이터 모음을 나타냅니다. 일반적으로 데이터베이스(예: BigQuery, Snowflake, Redshift 등)의 Table이나 View, 스트림 처리 환경(Kafka, Pulsar 등)의 Stream, 데이터 레이크 시스템(S3, ADLS 등)의 File이나 Folder 형태로 존재하는 데이터 묶음이 여기에 해당합니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/dataset.md">개발자 가이드: Dataset</a></li>
+</ul></blockquote>
+
+<h3 id="chart">Chart</h3>
+<p>Dataset에서 만든 단일 데이터 시각화입니다. Chart 하나가 여러 Dashboard에 포함될 수 있습니다. Chart에는 태그, 소유자, 링크, 용어집 용어, 설명을 붙일 수 있습니다. Superset이나 Looker의 Chart가 그 예입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/chart.md">개발자 가이드: Chart</a></li>
+</ul></blockquote>
+
+<h3 id="dashboard">Dashboard</h3>
+<p>시각화를 위한 Chart 모음입니다. Dashboard에는 태그, 소유자, 링크, 용어집 용어, 설명을 붙일 수 있습니다. Superset이나 Mode의 Dashboard가 그 예입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/dashboard.md">개발자 가이드: Dashboard</a></li>
+</ul></blockquote>
+
+<h3 id="data-job">Data Job</h3>
+<p>데이터 자산을 처리하는 실행 가능한 작업입니다. 여기서 "처리"는 데이터를 소비하거나, 생성하거나, 둘 다 하는 것을 뜻합니다.
+오케스트레이션 시스템에서는 "DAG" 안의 개별 "Task"라고 부르기도 합니다. Airflow Task가 그 예입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/dataJob.md">개발자 가이드: Data Job</a></li>
+</ul></blockquote>
+
+<h3 id="data-flow">Data Flow</h3>
+<p>서로 의존성이 있는 Data Job들로 이루어진 실행 가능한 모음, 즉 DAG입니다.
+"Pipeline"이라고 부르기도 합니다. Airflow DAG가 그 예입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/dataFlow.md">개발자 가이드: Data Flow</a></li>
+</ul></blockquote>
+
+<h3 id="glossary-term">Glossary Term</h3>
+<p>데이터 생태계 안에서 공유하는 어휘입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/glossary/business-glossary.md">기능 가이드: Glossary</a></li>
+<li><a href="/docs/generated/metamodel/entities/glossaryTerm.md">개발자 가이드: GlossaryTerm</a></li>
+</ul></blockquote>
+
+<h3 id="glossary-term-group">Glossary Term Group</h3>
+<p>Glossary Term Group은 폴더와 비슷합니다. Term뿐 아니라 다른 Term Group도 담을 수 있어 중첩 구조를 만들 수 있습니다.</p>
+<blockquote><ul>
+<li><a href="/docs/glossary/business-glossary.md#terms--term-groups">기능 가이드: Term과 Term Group</a></li>
+</ul></blockquote>
+
+<h3 id="tag">Tag</h3>
+<p>Tag는 검색과 탐색을 돕는 비공식적이고 느슨하게 관리되는 레이블입니다. 데이터셋, 데이터셋 스키마, 컨테이너에 추가할 수 있으며, 더 넓은 비즈니스 용어집이나 어휘와 연결하지 않고도 엔티티에 레이블을 붙이거나 분류하는 간편한 방법입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/tags.md">기능 가이드: DataHub Tag 소개</a></li>
+<li><a href="/docs/generated/metamodel/entities/tag.md">개발자 가이드: Tags</a></li>
+</ul></blockquote>
+
+<h3 id="domain">Domain</h3>
+<p>Domain은 관련 자산을 명시적으로 묶을 수 있도록 큐레이션한 최상위 폴더 또는 카테고리입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/domains.md">기능 가이드: DataHub Domain 소개</a></li>
+<li><a href="/docs/generated/metamodel/entities/domain.md">개발자 가이드: Domain</a></li>
+</ul></blockquote>
+
+<h3 id="owner">Owner</h3>
+<p>Owner는 엔티티에 대한 소유권을 가진 사용자나 그룹을 말합니다. 소유권은 데이터셋, 컬럼 또는 다른 엔티티에 지정할 수 있습니다.</p>
+<blockquote><ul>
+<li><a href="/docs/api/tutorials/owners.md#add-owners">시작하기: 데이터셋/컬럼에 Owner 추가하기</a></li>
+</ul></blockquote>
+
+<h3 id="users-corpuser">Users(CorpUser)</h3>
+<p>CorpUser는 기업 내 개인(또는 계정)의 ID를 나타냅니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/corpuser.md">개발자 가이드: CorpUser</a></li>
+</ul></blockquote>
+
+<h3 id="groups-corpgroup">Groups(CorpGroup)</h3>
+<p>CorpGroup은 기업 내 사용자 그룹의 ID를 나타냅니다.</p>
+<blockquote><ul>
+<li><a href="/docs/generated/metamodel/entities/corpGroup.md">개발자 가이드: CorpGroup</a></li>
+</ul></blockquote>
+
+<h2 id="metadata-model">메타데이터 모델</h2>
+
+<h3 id="entity">Entity</h3>
+<p>엔티티는 메타데이터 그래프의 기본 노드입니다. 예를 들어 Dataset이나 CorpUser의 인스턴스가 엔티티입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/modeling/metadata-model.md">DataHub는 메타데이터를 어떻게 모델링하나요?</a></li>
+</ul></blockquote>
+
+<h3 id="aspect">Aspect</h3>
+<p>Aspect는 엔티티의 특정 측면을 설명하는 속성 모음입니다.
+Aspect는 여러 엔티티가 공유할 수 있습니다. 예를 들어 "Ownership"은 소유자가 있는 모든 엔티티에서 재사용하는 aspect입니다.</p>
+<blockquote><ul>
+<li><a href="/docs/what/aspect.md">메타데이터 aspect란?</a></li>
+<li><a href="/docs/modeling/metadata-model.md">DataHub는 메타데이터를 어떻게 모델링하나요?</a></li>
+</ul></blockquote>
+
+<h3 id="relationships">Relationships</h3>
+<p>Relationship은 두 엔티티 사이의 이름 있는 엣지를 나타냅니다. Aspect 안의 외래 키 속성과 커스텀 어노테이션(@Relationship)으로 선언합니다.</p>
+<blockquote><ul>
+<li><a href="/docs/what/relationship.md">Relationship이란?</a></li>
+<li><a href="/docs/modeling/metadata-model.md">DataHub는 메타데이터를 어떻게 모델링하나요?</a></li>
+</ul></blockquote>
+
+      </article>
+    </main>
+  </div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var article = document.querySelector('article');
+
+  // Theme Toggle
+  document.getElementById('theme-toggle').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  });
+
+  // Heading Anchor: id 없는 제목에 id 부여, 중복 제거
+  var used = {};
+  article.querySelectorAll('[id]').forEach(function (el) { used[el.id] = true; });
+  var headings = article.querySelectorAll('h1, h2, h3, h4, h5, h6');
+  headings.forEach(function (h) {
+    if (h.id) return;
+    var base = h.textContent.trim().toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-') || 'section';
+    var id = base, n = 1;
+    while (used[id]) id = base + '-' + n++;
+    used[id] = true;
+    h.id = id;
+  });
+
+  // TOC Navigation (H2, H3)
+  var list = document.querySelector('.toc ul');
+  var links = {};
+  var tocHeadings = article.querySelectorAll('h2, h3');
+  tocHeadings.forEach(function (h) {
+    var li = document.createElement('li');
+    li.className = 'lvl-' + h.tagName[1];
+    var a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    li.appendChild(a);
+    list.appendChild(li);
+    links[h.id] = a;
+  });
+  if (!tocHeadings.length) document.querySelector('.toc').style.display = 'none';
+  var details = document.querySelector('.toc details');
+  if (matchMedia('(max-width: 768px)').matches) details.removeAttribute('open');
+  list.addEventListener('click', function (e) {
+    if (e.target.tagName === 'A' && matchMedia('(max-width: 768px)').matches) details.removeAttribute('open');
+  });
+  if ('IntersectionObserver' in window) {
+    var current = null;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        if (current) current.classList.remove('active');
+        current = links[en.target.id];
+        if (current) current.classList.add('active');
+      });
+    }, { rootMargin: '-60px 0px -70% 0px' });
+    tocHeadings.forEach(function (h) { io.observe(h); });
+  }
+
+  // Tables: 가로 스크롤 래퍼
+  article.querySelectorAll('table').forEach(function (t) {
+    var w = document.createElement('div');
+    w.className = 'table-wrap';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+
+  // Code Copy
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok ? Promise.resolve() : Promise.reject();
+  }
+  article.querySelectorAll('pre').forEach(function (pre) {
+    var wrap = document.createElement('div');
+    wrap.className = 'code-wrap';
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', function () {
+      var text = pre.innerText;
+      var p = navigator.clipboard && window.isSecureContext
+        ? navigator.clipboard.writeText(text).catch(function () { return fallbackCopy(text); })
+        : fallbackCopy(text);
+      p.then(function () { btn.textContent = 'Copied!'; }, function () { btn.textContent = '복사 실패'; })
+       .then(function () { setTimeout(function () { btn.textContent = 'Copy'; }, 1500); });
+    });
+    wrap.appendChild(btn);
+  });
+})();
+</script>
+</body>
+</html>

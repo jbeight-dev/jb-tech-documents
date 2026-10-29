@@ -1,0 +1,6 @@
+.DS_Store
+*.sh
+*.pyc
+*.xml
+*.py
+*.yml

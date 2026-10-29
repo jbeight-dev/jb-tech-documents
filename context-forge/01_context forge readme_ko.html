@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ContextForge</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<script>
+  // 깜빡임 방지: 렌더 전에 테마 적용 (localStorage → OS → light)
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('theme'); } catch (e) {}
+    if (t !== 'light' && t !== 'dark') {
+      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  /* Theme Variables */
+  :root {
+    --bg: #ffffff; --surface: #f6f8fa; --text: #24292f; --text-muted: #57606a;
+    --border: #d0d7de; --accent: #0969da; --code-bg: #f6f8fa; --hover: #eaeef2;
+    --mark: #a5e4ff;
+  }
+  [data-theme="dark"] {
+    --bg: #0d1117; --surface: #161b22; --text: #e6edf3; --text-muted: #8b949e;
+    --border: #30363d; --accent: #58a6ff; --code-bg: #161b22; --hover: #21262d;
+    --mark: rgba(56, 189, 248, .35);
+  }
+
+  /* Highlighter */
+  mark { background: linear-gradient(transparent 45%, var(--mark) 45%); color: inherit; padding: 0 .1em; }
+
+  /* Typography */
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: 72px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    font-size: 15px; line-height: 1.75; font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.4; margin: 2em 0 .75em; }
+  h1 { font-size: 2em; margin-top: 0; padding-bottom: .3em; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.25em; }
+  h4 { font-size: 1.05em; }
+  h5, h6 { font-size: 1em; color: var(--text-muted); }
+  p, ul, ol, blockquote, table, pre, details { margin: 0 0 1em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img { max-width: 100%; height: auto; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
+  blockquote { margin-left: 0; padding: 0 1em; color: var(--text-muted); border-left: 4px solid var(--border); }
+  li + li { margin-top: .25em; }
+  ul.contains-task-list { list-style: none; padding-left: 1.2em; }
+  .footnotes { font-size: .9em; color: var(--text-muted); }
+
+  /* Layout */
+  .site-header {
+    position: sticky; top: 0; z-index: 10; height: 56px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 24px; background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .document-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button {
+    font: inherit; font-size: 13px; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+  button:hover { background: var(--hover); }
+  .layout { display: flex; max-width: 1240px; margin: 0 auto; }
+  .content { flex: 1; min-width: 0; max-width: 960px; padding: 32px 40px 80px; }
+  .doc-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+  .doc-meta span + span::before { content: " · "; }
+
+  /* Sidebar */
+  .toc { width: 260px; flex-shrink: 0; }
+  .toc details { position: sticky; top: 56px; max-height: calc(100vh - 56px); overflow-y: auto; padding: 24px 16px; margin: 0; }
+  .toc summary { font-weight: 600; font-size: 13px; color: var(--text-muted); cursor: pointer; margin-bottom: 8px; }
+  .toc ul { list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 1.5; }
+  .toc li { margin: 0; }
+  .toc a { display: block; padding: 4px 8px; color: var(--text-muted); border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--text); background: var(--hover); text-decoration: none; }
+  .toc a.active { color: var(--accent); border-left-color: var(--accent); }
+  .toc .lvl-3 a { padding-left: 20px; }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin-bottom: 1em; }
+  table { border-collapse: collapse; margin: 0; }
+  th, td { border: 1px solid var(--border); padding: 6px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--surface); font-weight: 600; }
+
+  /* Code Blocks */
+  pre, code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 13px; }
+  :not(pre) > code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: .1em .35em; }
+  .code-wrap { position: relative; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; overflow-x: auto; line-height: 1.5; }
+  .copy-btn { position: absolute; top: 8px; right: 8px; font-size: 12px; padding: 2px 8px; opacity: .8; }
+  .copy-btn:hover { opacity: 1; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .site-header { padding: 0 16px; }
+    .layout { display: block; }
+    .toc { width: auto; border-bottom: 1px solid var(--border); }
+    .toc details { position: static; max-height: none; padding: 12px 16px; }
+    .content { padding: 24px 16px 64px; }
+  }
+
+  /* Print */
+  @media print {
+    :root, [data-theme="dark"] { --bg: #fff; --surface: #f6f8fa; --text: #000; --text-muted: #444; --border: #ccc; --accent: #0550ae; --code-bg: #f6f8fa; }
+    .site-header { position: static; }
+    #theme-toggle, .toc, .copy-btn { display: none !important; }
+    .content { max-width: none; padding: 0; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    pre, table, blockquote, img { page-break-inside: avoid; }
+    h1, h2, h3, h4 { page-break-after: avoid; }
+    a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .85em; color: var(--text-muted); }
+  }
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="document-title">ContextForge</div>
+    <button id="theme-toggle" type="button" aria-label="테마 변경">테마 변경</button>
+  </header>
+  <div class="layout">
+    <aside class="toc">
+      <details open><summary>목차</summary><nav><ul></ul></nav></details>
+    </aside>
+    <main class="content">
+      <div class="doc-meta">
+        <span>원본: context forge readme.md</span><span>언어: 한국어</span><span>번역일: 2026-10-30</span>
+      </div>
+      <article>
+<h1>ContextForge</h1>
+<p>작성일: 2026-10-30</p>
+
+<blockquote>
+<p>MCP, A2A, REST/gRPC API를 중앙화된 거버넌스, 디스커버리, 관측성(observability)과 함께 연합(federate)하는 오픈소스 레지스트리이자 프록시입니다. 에이전트와 도구 호출을 최적화하며, 플러그인을 지원합니다.</p>
+</blockquote>
+
+<p><mark>ContextForge</mark>는 도구, 에이전트, API를 AI 클라이언트를 위한 하나의 깔끔한 엔드포인트로 연합하는 오픈소스 레지스트리이자 프록시입니다. AI 인프라 전반에 중앙화된 거버넌스, 디스커버리, 관측성을 제공합니다.</p>
+
+<ul>
+<li><mark>Tools Gateway</mark> — MCP, REST, gRPC-MCP 변환, TOON 압축</li>
+<li><mark>Agent Gateway</mark> — A2A 프로토콜, OpenAI 호환 및 Anthropic 에이전트 라우팅</li>
+<li><mark>API Gateway</mark> — REST 서비스를 위한 속도 제한(rate limiting), 인증, 재시도, 리버스 프록시</li>
+<li><mark>플러그인 확장성</mark> — 추가 전송 방식, 프로토콜, 통합을 위한 40개 이상의 플러그인</li>
+<li><mark>관측성</mark> — Phoenix, Jaeger, Zipkin 및 기타 OTLP 백엔드를 이용한 OpenTelemetry 트레이싱</li>
+</ul>
+
+<p>ContextForge는 MCP 사양을 완전히 준수하는 MCP 서버로 동작하며, PyPI나 Docker로 배포할 수 있고, Redis 기반 연합과 캐싱으로 Kubernetes의 멀티 클러스터 환경까지 확장됩니다.</p>
+
+<hr>
+
+<h2>목차</h2>
+
+<ul>
+<li><a href="#overview--goals">개요와 목표</a></li>
+<li><a href="#quick-start---pypi">빠른 시작 - PyPI</a></li>
+<li><a href="#quick-start---containers">빠른 시작 - 컨테이너</a>
+<ul><li><a href="#optional-web-ui">선택 사항: 웹 UI</a></li></ul>
+</li>
+<li><a href="#quick-start-vs-code-dev-container">VS Code Dev Container</a></li>
+<li><a href="#installation">설치</a></li>
+<li><a href="#upgrading">업그레이드</a></li>
+<li><a href="#configuration">설정</a></li>
+<li><a href="#running">실행</a></li>
+<li><a href="#cloud-deployment">클라우드 배포</a></li>
+<li><a href="#api-reference">API 레퍼런스</a></li>
+<li><a href="#testing">테스트</a></li>
+<li><a href="#project-structure">프로젝트 구조</a></li>
+<li><a href="#development">개발</a></li>
+<li><a href="#troubleshooting">문제 해결</a></li>
+<li><a href="#contributing">기여하기</a></li>
+</ul>
+
+<hr>
+
+<h3>📌 바로가기</h3>
+
+<table>
+<thead><tr><th>리소스</th><th>설명</th></tr></thead>
+<tbody>
+<tr><td><mark><a href="https://github.com/IBM/mcp-context-forge/issues/2503">5분 설정</a></mark></td><td>빠르게 시작하기 — uvx, Docker, Compose, 로컬 개발</td></tr>
+<tr><td><mark><a href="https://github.com/IBM/mcp-context-forge/issues/2504">도움 받기</a></mark></td><td>지원 옵션, FAQ, 커뮤니티 채널</td></tr>
+<tr><td><mark><a href="https://github.com/IBM/mcp-context-forge/issues/2502">이슈 가이드</a></mark></td><td>버그 제보, 기능 요청, 기여 방법</td></tr>
+<tr><td><mark><a href="https://ibm.github.io/mcp-context-forge/">전체 문서</a></mark></td><td>전체 가이드, 튜토리얼, API 레퍼런스</td></tr>
+<tr><td><mark><a href="https://ibm.github.io/mcp-context-forge/deprecations/">지원 중단 항목</a></mark></td><td>지원 중단된 런타임 경로와 마이그레이션 안내</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2 id="overview--goals">개요와 목표</h2>
+
+<p><mark>ContextForge</mark>는 모든 <a href="https://modelcontextprotocol.io">Model Context Protocol</a>(MCP) 서버, A2A 서버, REST/gRPC API를 연합하고 중앙화된 거버넌스, 디스커버리, 관측성을 제공하는 오픈소스 레지스트리이자 프록시입니다. 에이전트와 도구 호출을 최적화하며, 플러그인을 지원합니다. 자세한 내용은 <a href="https://ibm.github.io/mcp-context-forge/architecture/roadmap/">프로젝트 로드맵</a>을 참고하세요.</p>
+
+<p>현재 지원하는 기능은 다음과 같습니다.</p>
+
+<ul>
+<li>여러 MCP 및 REST 서비스에 걸친 연합</li>
+<li>외부 AI 에이전트(OpenAI, Anthropic, 사용자 정의)를 위한 <mark>A2A(Agent-to-Agent) 통합</mark></li>
+<li>리플렉션 기반 자동 서비스 디스커버리를 통한 <mark>gRPC-MCP 변환</mark></li>
+<li>레거시 API를 MCP 호환 도구와 서버로 가상화</li>
+<li>HTTP, JSON-RPC, WebSocket, SSE(keepalive 설정 가능), Streamable HTTP를 통한 전송. 서버 측에서는 stdio 전송도 사용 가능</li>
+<li>실시간 관리, 설정, 로그 모니터링을 위한 Admin UI(에어갭 배포 지원)</li>
+<li>별도 컨테이너에서 실행되는, 새롭게 디자인되어 더 사용하기 쉬운 <a href="#optional-web-ui">웹 UI</a></li>
+<li>사용자 범위 OAuth 토큰과 무조건적인 X-Upstream-Authorization 헤더 지원을 갖춘 내장 인증, 재시도, 속도 제한</li>
+<li>Phoenix, Jaeger, Zipkin 및 기타 OTLP 백엔드를 이용한 <mark>OpenTelemetry 관측성</mark></li>
+<li>Docker 또는 PyPI를 통한 확장 가능한 배포, Redis 기반 캐싱, 멀티 클러스터 연합</li>
+</ul>
+
+<p>예정된 기능 목록은 <a href="https://ibm.github.io/mcp-context-forge/architecture/roadmap/">ContextForge 로드맵</a>을 확인하세요.</p>
+
+<hr>
+
+<details>
+<summary><mark>🔌 프로토콜 유연성을 갖춘 게이트웨이 계층</mark></summary>
+<ul>
+<li>모든 MCP 서버나 REST API를 연합합니다</li>
+<li>MCP 프로토콜 버전을 선택할 수 있습니다(예: <code>2025-11-25</code>)</li>
+<li>다양한 백엔드에 단일한 통합 인터페이스를 제공합니다</li>
+</ul>
+</details>
+
+<details>
+<summary><mark>🧩 REST/gRPC 서비스 가상화</mark></summary>
+<ul>
+<li>MCP가 아닌 서비스를 가상 MCP 서버로 감쌉니다</li>
+<li>최소한의 설정으로 도구, 프롬프트, 리소스를 등록합니다</li>
+<li>서버 리플렉션 프로토콜을 통한 <mark>gRPC-MCP 변환</mark></li>
+<li>자동 서비스 디스커버리와 메서드 인트로스펙션</li>
+</ul>
+</details>
+
+<details>
+<summary><mark>🔁 REST-MCP 도구 어댑터</mark></summary>
+<ul>
+<li>REST API를 다음 기능을 갖춘 도구로 변환합니다.
+<ul>
+<li>JSON Schema 자동 추출</li>
+<li>헤더, 토큰, 사용자 정의 인증 지원</li>
+<li>재시도, 타임아웃, 속도 제한 정책</li>
+</ul>
+</li>
+</ul>
+</details>
+
+<details>
+<summary><mark>🧠 통합 레지스트리</mark></summary>
+<ul>
+<li><mark>프롬프트</mark>: Jinja2 템플릿, 멀티모달 지원, 롤백/버전 관리</li>
+<li><mark>리소스</mark>: URI 기반 접근, MIME 감지, 캐싱, SSE 업데이트</li>
+<li><mark>도구</mark>: 네이티브 또는 어댑터 방식, 입력 검증과 동시성 제어 포함</li>
+</ul>
+</details>
+
+<details>
+<summary><mark>📈 Admin UI, 관측성, 개발자 경험</mark></summary>
+<ul>
+<li>HTMX 2.0.3(번들 포함) + Alpine.js로 만든 Admin UI</li>
+<li>필터링, 검색, 내보내기 기능을 갖춘 실시간 로그 뷰어</li>
+<li>인증: Basic, JWT 또는 사용자 정의 방식</li>
+<li>구조화된 로그, 헬스 엔드포인트, 메트릭</li>
+<li>7,000개 이상의 테스트, Makefile 타깃, 라이브 리로드, pre-commit 훅</li>
+</ul>
+</details>
+
+<details>
+<summary><mark>🔍 OpenTelemetry 관측성</mark></summary>
+<ul>
+<li>OpenTelemetry(OTLP) 프로토콜을 지원하는 <mark>벤더 중립적 트레이싱</mark></li>
+<li><mark>다양한 백엔드 지원</mark>: Phoenix(LLM 중심), Jaeger, Zipkin, Tempo, DataDog, New Relic</li>
+<li>연합된 게이트웨이와 서비스 전반의 <mark>분산 트레이싱</mark></li>
+<li>도구, 프롬프트, 리소스, 게이트웨이 작업의 <mark>자동 계측</mark></li>
+<li><mark>LLM 전용 메트릭</mark>: 토큰 사용량, 비용, 모델 성능</li>
+<li><mark>비활성화 시 오버헤드 없음</mark>, 우아한 성능 저하(graceful degradation)</li>
+</ul>
+<p>Phoenix, Jaeger 및 기타 백엔드 설정 가이드는 <mark><a href="https://ibm.github.io/mcp-context-forge/manage/observability/">관측성 문서</a></mark>를 참고하세요.</p>
+</details>
+
+<hr>
+
+<h2 id="quick-start---pypi">빠른 시작 - PyPI</h2>
+
+<p>ContextForge는 <a href="https://pypi.org/project/mcp-contextforge-gateway/">PyPI</a>에 <code>mcp-contextforge-gateway</code>로 게시되어 있습니다.</p>
+
+<hr>
+
+<blockquote>
+<p>⚠️ <mark><code>JWT_SECRET_KEY</code>와 <code>AUTH_ENCRYPTION_SECRET</code>은 로컬 개발을 포함한 모든 환경에서 필수입니다.</mark> 이 값들이 없으면 게이트웨이가 시작되지 않습니다. 처음 실행하기 전에 <code>python3 -m mcpgateway.scripts.init_secrets</code>로 실제 시크릿을 생성하세요.</p>
+</blockquote>
+
+<p><mark>TLDR</mark> — <a href="https://docs.astral.sh/uv/">uv</a>를 사용하는 단일 명령:</p>
+
+<pre><code class="language-bash"># 1️⃣  Generate secure secrets (creates .env.secrets)
+python3 -m mcpgateway.scripts.init_secrets
+
+# 2️⃣  Export the generated values
+export JWT_SECRET_KEY="$(grep '^JWT_SECRET_KEY=' .env.secrets | cut -d= -f2)"
+export AUTH_ENCRYPTION_SECRET="$(grep '^AUTH_ENCRYPTION_SECRET=' .env.secrets | cut -d= -f2)"
+
+# 3️⃣  Start the gateway
+JWT_SECRET_KEY="$JWT_SECRET_KEY" \
+AUTH_ENCRYPTION_SECRET="$AUTH_ENCRYPTION_SECRET" \
+MCPGATEWAY_UI_ENABLED=true \
+MCPGATEWAY_ADMIN_API_ENABLED=true \
+PLATFORM_ADMIN_EMAIL=admin@example.com \
+uvx --from mcp-contextforge-gateway mcpgateway --host 0.0.0.0 --port 4444
+</code></pre>
+
+<details>
+<summary><mark>📋 사전 요구 사항</mark></summary>
+<ul>
+<li><mark>Python ≥ 3.11</mark></li>
+<li><mark>curl + jq</mark> - 마지막 스모크 테스트 단계에서만 필요</li>
+</ul>
+</details>
+
+<h3>1 - 설치 및 실행(복사해서 붙여넣기 쉬운 버전)</h3>
+
+<pre><code class="language-bash"># 1️⃣  Create an isolated env and install from PyPI
+mkdir mcpgateway &amp;&amp; cd mcpgateway
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install --upgrade pip
+pip install mcp-contextforge-gateway
+
+# 2️⃣  Download .env.example and generate real secrets
+curl -O https://raw.githubusercontent.com/IBM/mcp-context-forge/main/.env.example
+cp .env.example .env
+
+# Generate cryptographically secure secrets into .env.secrets
+python3 -m mcpgateway.scripts.init_secrets
+
+# Patch the generated secrets into .env (replaces __REPLACE_ME__ placeholders)
+python3 -m mcpgateway.scripts.init_secrets --patch-env .env
+
+# 3️⃣  Start the gateway
+mcpgateway --host 0.0.0.0 --port 4444 &amp;
+
+# 4️⃣  Generate a bearer token and smoke-test
+export JWT_SECRET_KEY=$(grep '^JWT_SECRET_KEY=' .env | cut -d= -f2)
+export MCPGATEWAY_BEARER_TOKEN=$(python3 -m mcpgateway.utils.create_jwt_token \
+    --username admin@example.com --exp 10080 --secret "$JWT_SECRET_KEY")
+
+curl -s -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" \
+     http://127.0.0.1:4444/version | jq
+</code></pre>
+
+<details>
+<summary><mark>Windows(PowerShell) 빠른 시작</mark></summary>
+
+<pre><code class="language-powershell"># 1️⃣  Isolated env + install from PyPI
+mkdir mcpgateway ; cd mcpgateway
+python3 -m venv .venv ; .\.venv\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install mcp-contextforge-gateway
+
+# 2️⃣  Download .env.example and generate real secrets
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/IBM/mcp-context-forge/main/.env.example" -OutFile ".env.example"
+Copy-Item .env.example .env
+
+# Generate cryptographically secure secrets into .env.secrets
+python3 -m mcpgateway.scripts.init_secrets
+
+# Patch the generated secrets into .env (replaces __REPLACE_ME__ placeholders)
+python3 -m mcpgateway.scripts.init_secrets --patch-env .env
+
+# 3️⃣  Launch the gateway
+mcpgateway.exe --host 0.0.0.0 --port 4444
+
+# 4️⃣  Bearer token and smoke-test
+$Env:JWT_SECRET_KEY = (Get-Content .env | Select-String '^JWT_SECRET_KEY=').ToString().Split('=')[1]
+$Env:MCPGATEWAY_BEARER_TOKEN = python3 -m mcpgateway.utils.create_jwt_token `
+    --username admin@example.com --exp 10080 --secret $Env:JWT_SECRET_KEY
+
+curl -s -H "Authorization: Bearer $Env:MCPGATEWAY_BEARER_TOKEN" `
+     http://127.0.0.1:4444/version | jq
+</code></pre>
+
+<details>
+<summary><mark>⚡ 대안: uv(더 빠름)</mark></summary>
+
+<pre><code class="language-powershell"># 1️⃣  Isolated env + install from PyPI using uv
+mkdir mcpgateway ; cd mcpgateway
+uv venv
+.\.venv\Scripts\activate
+uv pip install mcp-contextforge-gateway
+
+# Continue with steps 2️⃣-4️⃣ above...
+</code></pre>
+
+</details>
+
+</details>
+
+<details>
+<summary><mark>추가 설정</mark></summary>
+<p><a href="https://github.com/IBM/mcp-context-forge/blob/main/.env.example">.env.example</a>을 <code>.env</code>로 복사하고 원하는 설정을 조정하세요(또는 환경 변수로 사용하세요).</p>
+</details>
+
+<details>
+<summary><mark>🚀 엔드 투 엔드 데모(로컬 MCP 서버 등록)</mark></summary>
+
+<pre><code class="language-bash"># 1️⃣  Spin up the sample MCP time server using mcpgateway.translate &amp; docker (replace docker with podman if needed)
+python3 -m mcpgateway.translate \
+     --stdio "docker run --rm -i ghcr.io/ibm/fast-time-server:latest -transport=stdio" \
+     --expose-sse \
+     --port 8003
+
+# Or using the official mcp-server-git using uvx:
+pip install uv # to install uvx, if not already installed
+python3 -m mcpgateway.translate --stdio "uvx mcp-server-git" --expose-sse --port 9000
+
+# NEW: Expose via multiple protocols simultaneously!
+python3 -m mcpgateway.translate \
+     --stdio "uvx mcp-server-git" \
+     --expose-sse \
+     --expose-streamable-http \
+     --port 9000
+# Now accessible via both /sse (SSE) and /mcp (streamable HTTP) endpoints
+
+# 2️⃣  Register it with the gateway
+curl -s -X POST -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"fast_time","url":"http://localhost:8003/sse"}' \
+     http://localhost:4444/gateways
+
+# 3️⃣  Verify tool catalog
+curl -s -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" http://localhost:4444/tools | jq
+
+# 4️⃣  Create a *virtual server* bundling those tools. Use the ID of tools from the tool catalog (Step #3) and pass them in the associatedTools list.
+curl -s -X POST -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"server":{"name":"time_server","description":"Fast time tools","associated_tools":[&lt;ID_OF_TOOLS&gt;]}}' \
+     http://localhost:4444/servers | jq
+
+# Example curl
+curl -s -X POST -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"server":{"name":"time_server","description":"Fast time tools","associated_tools":["6018ca46d32a4ac6b4c054c13a1726a2"]}}' \
+     http://localhost:4444/servers | jq
+
+# 5️⃣  List servers (should now include the UUID of the newly created virtual server)
+curl -s -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" http://localhost:4444/servers | jq
+
+# 6️⃣  Client HTTP endpoint. Inspect it interactively with the MCP Inspector CLI (or use any MCP client)
+npx -y @modelcontextprotocol/inspector
+# Transport Type: Streamable HTTP, URL: http://localhost:4444/servers/UUID_OF_SERVER_1/mcp,  Header Name: "Authorization", Bearer Token
+</code></pre>
+
+</details>
+
+<hr>
+
+<h2 id="quick-start---containers">빠른 시작 - 컨테이너</h2>
+
+<p>GHCR의 공식 OCI 이미지를 <mark>Docker</mark> <em>또는</em> <mark>Podman</mark>으로 사용합니다.<br>
+참고: 현재 운영 환경에서는 arm64를 지원하지 않습니다. 예를 들어 Apple Silicon 칩(M1, M2 등)을 쓰는 MacOS에서 실행한다면, Rosetta를 사용해 컨테이너를 실행하거나 대신 PyPi로 설치할 수 있습니다.</p>
+
+<h3>🚀 빠른 시작 - Docker Compose</h3>
+
+<blockquote>
+<p><mark>중요:</mark> <code>docker compose up -d</code>는 기본적으로 게이트웨이 이미지를 로컬에서 빌드하지 <mark>않습니다</mark> — GHCR에서 미리 빌드된 이미지를 사용합니다. compose 파일에는 대체 수단으로 <code>build:</code> 블록이 있지만, 로컬 빌드에는 CI 파이프라인에서만 생성되는 밀폐형(hermetic) wheel 클로저가 필요합니다. 빌드 중에 <code>cryptography</code> 오류나 의존성 해석 오류가 보인다면 이 경우에 해당하므로, 대신 이미지를 pull하세요(아래 2단계가 이를 자동으로 처리합니다).</p>
+<p><code>docker compose up -d</code>를 실행하기 전에 실제 시크릿이 들어 있는 <code>.env</code> 파일도 <mark>반드시</mark> 있어야 합니다. placeholder 값으로는 게이트웨이가 시작되지 않습니다.</p>
+</blockquote>
+
+<p>PostgreSQL과 Redis를 포함한 전체 스택을 실행합니다.</p>
+
+<pre><code class="language-bash"># 1️⃣  Clone the repository
+git clone https://github.com/IBM/mcp-context-forge.git
+cd mcp-context-forge
+
+# 2️⃣  Set up .env with real secrets AND pull the pre-built images
+cp .env.example .env
+python3 -m mcpgateway.scripts.init_secrets --patch-env .env
+# .env now has strong JWT_SECRET_KEY and AUTH_ENCRYPTION_SECRET
+
+# Pull pre-built images from GHCR (avoids local build entirely)
+docker pull ghcr.io/ibm/mcp-context-forge:latest
+echo 'IMAGE_LOCAL=ghcr.io/ibm/mcp-context-forge:latest' &gt;&gt; .env
+
+# Build only the nginx image (small, local-only, builds in seconds)
+docker compose build nginx
+
+# 3️⃣  Start the full stack
+docker compose up -d
+
+# 4️⃣  Check status
+docker compose ps
+
+# 5️⃣  View logs
+docker compose logs -f gateway
+
+# 6️⃣  Access Admin UI: http://localhost:8080/admin
+#     Login: PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD (from .env)
+
+# 7️⃣  Generate an API token
+export JWT_SECRET_KEY=$(grep '^JWT_SECRET_KEY=' .env | cut -d= -f2)
+docker compose exec gateway python3 -m mcpgateway.utils.create_jwt_token \
+  --username admin@example.com --exp 10080 --secret "$JWT_SECRET_KEY"
+</code></pre>
+
+<p><mark>구성 요소:</mark></p>
+<ul>
+<li>🗄️ <mark>PostgreSQL</mark> - 55개 이상의 테이블을 갖춘 운영 환경용 데이터베이스</li>
+<li>🚀 <mark>ContextForge</mark> - Admin UI를 포함한 모든 기능을 갖춘 게이트웨이</li>
+<li>📊 <mark>Redis</mark> - 고성능 캐싱과 세션 저장소</li>
+<li>🔧 <mark>관리 도구</mark> - 데이터베이스 관리를 위한 pgAdmin, Redis Insight</li>
+<li>🌐 <mark>Nginx 프록시</mark> - 포트 8080의 캐싱 리버스 프록시</li>
+</ul>
+
+<p><mark>HTTPS 활성화(선택 사항):</mark></p>
+<pre><code class="language-bash"># Start with TLS enabled (auto-generates self-signed certs)
+make compose-tls
+
+# Access via HTTPS: https://localhost:8443/admin
+
+# Or bring your own certificates:
+# Unencrypted key:
+mkdir -p certs
+cp your-cert.pem certs/cert.pem &amp;&amp; cp your-key.pem certs/key.pem
+make compose-tls
+
+# Passphrase-protected key:
+mkdir -p certs
+cp your-cert.pem certs/cert.pem &amp;&amp; cp your-encrypted-key.pem certs/key-encrypted.pem
+echo "KEY_FILE_PASSWORD=your-passphrase" &gt;&gt; .env
+make compose-tls
+</code></pre>
+
+<h4 id="optional-web-ui">선택 사항: 웹 UI</h4>
+
+<p><mark>ContextForge Web UI v0.2.4</mark>는 내장 Admin UI와 별개로, 새롭게 디자인되어 더 사용하기 쉬운 인터페이스를 제공합니다.<br>
+자체 컨테이너에서 실행되며 게이트웨이 API에 연결합니다.</p>
+
+<p>위의 Docker Compose 설정을 마친 뒤, 게이트웨이 체크아웃 디렉터리에서 다음 명령으로 웹 UI를 시작합니다.</p>
+
+<pre><code class="language-bash">make compose-pull PROFILE="--profile ui"
+make compose-up PROFILE="--profile ui"
+</code></pre>
+
+<p><a href="http://localhost:3001">http://localhost:3001</a>을 열고 게이트웨이 계정으로 로그인하세요.<br>
+포트를 바꾸려면 <code>.env</code>에서 <code>WEB_UI_PORT</code>를 설정합니다.<br>
+<code>ui</code> 프로필은 게이트웨이와 함께 웹 UI와 전용 Redis 세션 저장소를 시작합니다.</p>
+
+<p><code>PROFILE</code>은 Makefile의 기본 프로필을 대체합니다.<br>
+<code>linux/amd64</code>에서 기본 fast-time 서비스를 유지하려면 두 명령 모두에 <code>PROFILE="--profile with-fast-time --profile ui"</code>를 사용하세요.</p>
+
+<p>별도의 npm 개발 환경 설정은 <a href="https://github.com/contextforge-org/contextforge-web-ui/blob/v0.2.4/README.md#getting-started">웹 UI 설정 가이드</a>를 참고하세요.</p>
+
+<h3>☸️ 빠른 시작 - Helm(Kubernetes)</h3>
+
+<p>엔터프라이즈급 기능과 함께 Kubernetes에 배포합니다.</p>
+
+<pre><code class="language-bash"># Add Helm repository (when available)
+# helm repo add mcp-context-forge https://ibm.github.io/mcp-context-forge
+# helm repo update
+
+# For now, use local chart
+git clone https://github.com/IBM/mcp-context-forge.git
+cd mcp-context-forge/charts/mcp-stack
+
+# Generate secrets first
+python3 -m mcpgateway.scripts.init_secrets
+JWT_SECRET=$(grep '^JWT_SECRET_KEY=' .env.secrets | cut -d= -f2)
+ENC_SECRET=$(grep '^AUTH_ENCRYPTION_SECRET=' .env.secrets | cut -d= -f2)
+
+# Install with PostgreSQL (default)
+# IMPORTANT: replace &lt;strong-password&gt; with a real password — do not use 'changeme' in production
+helm install mcp-gateway . \
+  --set mcpContextForge.secret.PLATFORM_ADMIN_EMAIL=admin@yourcompany.com \
+  --set mcpContextForge.secret.PLATFORM_ADMIN_PASSWORD=&lt;strong-password&gt; \
+  --set mcpContextForge.secret.BASIC_AUTH_PASSWORD=&lt;strong-password&gt; \
+  --set "mcpContextForge.secret.JWT_SECRET_KEY=${JWT_SECRET}" \
+  --set "mcpContextForge.secret.AUTH_ENCRYPTION_SECRET=${ENC_SECRET}"
+
+# Check deployment status
+kubectl get pods -l app.kubernetes.io/name=mcp-context-forge
+
+# Port forward to access Admin UI
+kubectl port-forward svc/mcp-gateway-mcp-context-forge 4444:80
+# Access: http://localhost:4444/admin
+
+# Generate API token (reads JWT_SECRET_KEY from the pod's environment)
+kubectl exec deployment/mcp-gateway-mcp-context-forge -- \
+  python3 -m mcpgateway.utils.create_jwt_token \
+  --username admin@yourcompany.com --exp 10080 --secret "${JWT_SECRET}"
+</code></pre>
+
+<blockquote>
+<p>SSRF 참고: Helm은 기본적으로 엄격한 SSRF 설정(<code>SSRF_ALLOW_PRIVATE_NETWORKS=false</code>)을 사용합니다.<br>
+클러스터 내부 도구 URL을 등록한다면 <code>mcpContextForge.config.SSRF_ALLOWED_NETWORKS</code>로 클러스터 CIDR만 허용하거나, 로컬 전용 벤치마크 환경이라면 일시적으로 <code>SSRF_ALLOW_PRIVATE_NETWORKS=true</code>로 설정하세요.<br>
+<code>docs/docs/manage/configuration.md#ssrf-protection</code>과 <code>docs/docs/deployment/helm.md</code>를 참고하세요.</p>
+</blockquote>
+
+<p><mark>엔터프라이즈 기능:</mark></p>
+<ul>
+<li>🔄 <mark>오토스케일링</mark> - CPU/메모리 목표치 기반 HPA</li>
+<li>🗄️ <mark>데이터베이스 선택</mark> - PostgreSQL(운영), SQLite(개발)</li>
+<li>📊 <mark>관측성</mark> - Prometheus 메트릭, OpenTelemetry 트레이싱</li>
+<li>🔒 <mark>보안</mark> - RBAC, 네트워크 정책, 시크릿 관리</li>
+<li>🚀 <mark>고가용성</mark> - Redis 클러스터링을 사용한 멀티 레플리카 배포</li>
+<li>📈 <mark>모니터링</mark> - 내장 Grafana 대시보드와 알림</li>
+</ul>
+
+<hr>
+
+<h3>🐳 Docker(단일 컨테이너)</h3>
+
+<pre><code class="language-bash"># Generate secrets first (creates .env.secrets)
+python3 -m mcpgateway.scripts.init_secrets
+export JWT_SECRET_KEY="$(grep '^JWT_SECRET_KEY=' .env.secrets | cut -d= -f2)"
+export AUTH_ENCRYPTION_SECRET="$(grep '^AUTH_ENCRYPTION_SECRET=' .env.secrets | cut -d= -f2)"
+
+docker run -d --name mcpgateway \
+  -p 4444:4444 \
+  -e MCPGATEWAY_UI_ENABLED=true \
+  -e MCPGATEWAY_ADMIN_API_ENABLED=true \
+  -e HOST=0.0.0.0 \
+  -e JWT_SECRET_KEY="${JWT_SECRET_KEY}" \
+  -e AUTH_ENCRYPTION_SECRET="${AUTH_ENCRYPTION_SECRET}" \
+  -e AUTH_REQUIRED=true \
+  -e PLATFORM_ADMIN_EMAIL=admin@example.com \
+  -e PLATFORM_ADMIN_PASSWORD=&lt;strong-password&gt; \
+  -e PLATFORM_ADMIN_FULL_NAME="Platform Administrator" \
+  -e DATABASE_URL=sqlite:///./mcp.db \
+  -e SECURE_COOKIES=false \
+  ghcr.io/ibm/mcp-context-forge:latest
+
+# Tail logs
+docker logs -f mcpgateway
+
+# Generate API token (using the same secret)
+docker run --rm -it \
+  -e JWT_SECRET_KEY="${JWT_SECRET_KEY}" \
+  ghcr.io/ibm/mcp-context-forge:latest \
+  python3 -m mcpgateway.utils.create_jwt_token \
+  --username admin@example.com --exp 10080 --secret "${JWT_SECRET_KEY}"
+</code></pre>
+
+<p><mark><a href="http://localhost:4444/admin">http://localhost:4444/admin</a></mark>에 접속해 <code>PLATFORM_ADMIN_EMAIL</code> / <code>PLATFORM_ADMIN_PASSWORD</code>로 로그인하세요.</p>
+
+<details>
+<summary><mark>고급: 영구 저장소, 호스트 네트워킹, 에어갭</mark></summary>
+
+<p><mark>SQLite 데이터베이스 영구 저장:</mark></p>
+<pre><code class="language-bash">mkdir -p $(pwd)/data &amp;&amp; touch $(pwd)/data/mcp.db &amp;&amp; chmod 777 $(pwd)/data
+docker run -d --name mcpgateway --restart unless-stopped \
+  -p 4444:4444 -v $(pwd)/data:/data \
+  -e DATABASE_URL=sqlite:////data/mcp.db \
+  -e MCPGATEWAY_UI_ENABLED=true -e MCPGATEWAY_ADMIN_API_ENABLED=true \
+  -e HOST=0.0.0.0 -e JWT_SECRET_KEY="${JWT_SECRET_KEY}" \
+  -e AUTH_ENCRYPTION_SECRET="${AUTH_ENCRYPTION_SECRET}" \
+  -e PLATFORM_ADMIN_EMAIL=admin@example.com -e PLATFORM_ADMIN_PASSWORD=&lt;strong-password&gt; \
+  ghcr.io/ibm/mcp-context-forge:latest
+</code></pre>
+
+<p><mark>호스트 네트워킹</mark>(로컬 MCP 서버 접근):</p>
+<pre><code class="language-bash">docker run -d --name mcpgateway --network=host \
+  -v $(pwd)/data:/data -e DATABASE_URL=sqlite:////data/mcp.db \
+  -e MCPGATEWAY_UI_ENABLED=true -e HOST=0.0.0.0 -e PORT=4444 \
+  -e JWT_SECRET_KEY="${JWT_SECRET_KEY}" -e AUTH_ENCRYPTION_SECRET="${AUTH_ENCRYPTION_SECRET}" \
+  ghcr.io/ibm/mcp-context-forge:latest
+</code></pre>
+
+<p><mark>에어갭 배포</mark>(인터넷 없음):</p>
+<pre><code class="language-bash">docker build -f Containerfile -t mcpgateway:airgapped .
+docker run -d --name mcpgateway -p 4444:4444 \
+  -e MCPGATEWAY_UI_AIRGAPPED=true -e MCPGATEWAY_UI_ENABLED=true \
+  -e HOST=0.0.0.0 -e JWT_SECRET_KEY="${JWT_SECRET_KEY}" \
+  -e AUTH_ENCRYPTION_SECRET="${AUTH_ENCRYPTION_SECRET}" \
+  mcpgateway:airgapped
+</code></pre>
+
+</details>
+
+<hr>
+
+<h3>🦭 Podman(rootless 친화적)</h3>
+
+<pre><code class="language-bash">podman run -d --name mcpgateway \
+  -p 4444:4444 -e HOST=0.0.0.0 -e DATABASE_URL=sqlite:///./mcp.db \
+  ghcr.io/ibm/mcp-context-forge:1.0.0-RC-3
+</code></pre>
+
+<details>
+<summary><mark>고급: 영구 저장소, 호스트 네트워킹</mark></summary>
+
+<p><mark>SQLite 영구 저장:</mark></p>
+<pre><code class="language-bash">mkdir -p $(pwd)/data &amp;&amp; chmod 777 $(pwd)/data
+podman run -d --name mcpgateway --restart=on-failure \
+  -p 4444:4444 -v $(pwd)/data:/data \
+  -e DATABASE_URL=sqlite:////data/mcp.db \
+  ghcr.io/ibm/mcp-context-forge:1.0.0-RC-3
+</code></pre>
+
+<p><mark>호스트 네트워킹:</mark></p>
+<pre><code class="language-bash">podman run -d --name mcpgateway --network=host \
+  -v $(pwd)/data:/data -e DATABASE_URL=sqlite:////data/mcp.db \
+  ghcr.io/ibm/mcp-context-forge:1.0.0-RC-3
+</code></pre>
+
+</details>
+
+<hr>
+
+<details>
+<summary><mark>✏️ Docker/Podman 팁</mark></summary>
+<ul>
+<li><mark>.env 파일</mark> - <code>-e FOO=</code> 줄을 모두 파일 하나에 넣고 <code>--env-file .env</code>로 대체하세요. 참고용으로 제공되는 <a href="https://github.com/IBM/mcp-context-forge/blob/main/.env.example">.env.example</a>을 확인하세요.</li>
+<li><mark>고정 태그</mark> - 재현 가능한 빌드를 위해 <code>latest</code> 대신 명시적인 버전(예: <code>1.0.0-RC-3</code>)을 사용하세요.</li>
+<li><mark>JWT 토큰</mark> - 실행 중인 컨테이너 안에서 생성합니다(컨테이너 환경에서 시크릿을 읽습니다).
+<pre><code class="language-bash">docker exec mcpgateway python3 -m mcpgateway.utils.create_jwt_token \
+  --username admin@example.com --exp 10080 --secret "${JWT_SECRET_KEY}"
+</code></pre>
+</li>
+<li><mark>업그레이드</mark> - 컨테이너를 중지하고 제거한 뒤 같은 <code>-v $(pwd)/data:/data</code> 마운트로 다시 실행하세요. DB와 설정은 그대로 유지됩니다.</li>
+</ul>
+</details>
+
+<hr>
+
+<details>
+<summary><mark>🚑 실행 중인 컨테이너 스모크 테스트</mark></summary>
+
+<pre><code class="language-bash">curl -s -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" \
+     http://localhost:4444/health | jq
+curl -s -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" \
+     http://localhost:4444/tools | jq
+curl -s -H "Authorization: Bearer $MCPGATEWAY_BEARER_TOKEN" \
+     http://localhost:4444/version | jq
+</code></pre>
+
+</details>
+
+<hr>
+
+<h2 id="quick-start-vs-code-dev-container">빠른 시작: VS Code Dev Container</h2>
+
+<p>저장소를 클론해 VS Code에서 열면 <code>.devcontainer</code>를 감지하고 <mark>"Reopen in Container"</mark>를 제안합니다. 컨테이너에는 Python 3.11, Docker CLI, 모든 프로젝트 의존성이 포함되어 있습니다.</p>
+
+<p>자세한 설정, 워크플로, GitHub Codespaces 안내는 <mark><a href="https://ibm.github.io/mcp-context-forge/development/developer-onboarding/">개발자 온보딩</a></mark>을 참고하세요.</p>
+
+<hr>
+
+<h2 id="installation">설치</h2>
+
+<pre><code class="language-bash">make venv install-dev      # create .venv + install deps + build Admin UI
+make serve                 # gunicorn on :4444
+</code></pre>
+
+<p>Rust 워크스페이스 참고:</p>
+<ul>
+<li>워크스페이스가 소유한 Rust crate는 <code>crates/</code> 아래에 있으며, 루트 <code>Cargo.toml</code>이 <code>crates/*</code>로 이를 포함합니다.</li>
+<li>공유 워크스페이스 전체를 대상으로 하려면 저장소 루트에서 <code>cargo build</code>, <code>cargo test</code>, <code>cargo check</code>를 실행하세요.</li>
+<li><code>make venv install-dev</code>는 루트 <code>.venv</code>를 만들며, 이는 워크스페이스의 PyO3/maturin 빌드에서도 재사용됩니다.</li>
+</ul>
+
+<details>
+<summary><mark>대안: UV 또는 pip</mark></summary>
+
+<pre><code class="language-bash"># UV (faster)
+uv venv &amp;&amp; source .venv/bin/activate
+uv pip install -e '.[dev]'
+
+# pip
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -e ".[dev]"
+</code></pre>
+
+</details>
+
+<details>
+<summary><mark>PostgreSQL 어댑터 설정</mark></summary>
+
+<p>PostgreSQL용 <code>psycopg</code> 드라이버를 설치합니다.</p>
+
+<pre><code class="language-bash"># Install system dependencies first
+# Debian/Ubuntu: sudo apt-get install libpq-dev
+# macOS: brew install libpq
+
+uv pip install 'psycopg[binary]'   # dev (pre-built wheels)
+# or: uv pip install 'psycopg[c]'  # production (requires compiler)
+</code></pre>
+
+<p>연결 URL 형식:</p>
+<pre><code class="language-bash">DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/mcp
+</code></pre>
+
+<p>간단한 Postgres 컨테이너:</p>
+<pre><code class="language-bash">docker run --name mcp-postgres \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=mysecretpassword \
+  -e POSTGRES_DB=mcp -p 5432:5432 -d postgres
+</code></pre>
+
+</details>
+
+<hr>
+
+<h2 id="upgrading">업그레이드</h2>
+
+<p>업그레이드 안내, 마이그레이션 가이드, 롤백 절차는 다음을 참고하세요.</p>
+
+<ul>
+<li><mark><a href="https://ibm.github.io/mcp-context-forge/manage/upgrade/">업그레이드 가이드</a></mark> — 일반 업그레이드 절차</li>
+<li><mark><a href="./MIGRATION.md">MIGRATION.md</a></mark> — 호환성을 깨는 변경 사항과 단계별 업그레이드 안내</li>
+<li><mark><a href="./CHANGELOG.md">CHANGELOG.md</a></mark> — 버전 이력과 호환성을 깨는 변경 사항</li>
+</ul>
+
+<hr>
+
+<h2 id="configuration">설정</h2>
+
+<blockquote>
+<p>⚠️ 필수 <code>.env</code> 변수가 하나라도 없거나 유효하지 않으면, 게이트웨이는 시작 시 Pydantic 검증 오류와 함께 즉시 실패합니다.</p>
+</blockquote>
+
+<p>제공된 <a href="https://github.com/IBM/mcp-context-forge/blob/main/.env.example">.env.example</a>을 <code>.env</code>로 복사하고, 아래의 보안에 민감한 값들을 수정하세요.</p>
+
+<h3>🔐 필수: 시작 전에 설정</h3>
+
+<p>게이트웨이가 시작되려면 다음 변수를 <mark>반드시 설정해야 합니다</mark>. 사용할 수 있는 기본값이 없으며, 값이 없거나 placeholder 값이면 애플리케이션이 시작 시 실패합니다.</p>
+
+<table>
+<thead><tr><th>변수</th><th>설명</th><th>생성 방법</th></tr></thead>
+<tbody>
+<tr><td><code>JWT_SECRET_KEY</code></td><td>JWT 서명용 HMAC 시크릿(32자 이상)</td><td><code>python3 -m mcpgateway.scripts.init_secrets</code></td></tr>
+<tr><td><code>AUTH_ENCRYPTION_SECRET</code></td><td>저장된 자격 증명을 암호화하는 패스프레이즈</td><td><code>python3 -m mcpgateway.scripts.init_secrets</code></td></tr>
+</tbody>
+</table>
+
+<p>다음 변수는 기본값이 안전하지 않으므로 운영 환경에서 사용하기 전에 <mark>변경하는 것이 좋습니다</mark>.</p>
+
+<table>
+<thead><tr><th>변수</th><th>설명</th><th>기본값</th></tr></thead>
+<tbody>
+<tr><td><code>BASIC_AUTH_USER</code></td><td>HTTP Basic 인증 사용자 이름</td><td><code>admin</code></td></tr>
+<tr><td><code>BASIC_AUTH_PASSWORD</code></td><td>HTTP Basic 인증 비밀번호</td><td><mark>필수 — 기본값 없음. <code>make init-secrets-patch-env</code>로 설정</mark></td></tr>
+<tr><td><code>PLATFORM_ADMIN_EMAIL</code></td><td>부트스트랩 관리자 사용자의 이메일</td><td><code>admin@example.com</code></td></tr>
+<tr><td><code>PLATFORM_ADMIN_PASSWORD</code></td><td>부트스트랩 관리자 사용자의 비밀번호</td><td><mark>필수 — 처음 실행하기 전에 강력한 값을 설정</mark></td></tr>
+<tr><td><code>PLATFORM_ADMIN_FULL_NAME</code></td><td>부트스트랩 관리자의 표시 이름</td><td><code>Admin User</code></td></tr>
+</tbody>
+</table>
+
+<h3>🔒 보안 기본값(기본적으로 안전)</h3>
+
+<p>다음 설정은 보안을 위해 기본적으로 활성화되어 있습니다. 하위 호환성이 필요할 때만 비활성화하세요.</p>
+
+<table>
+<thead><tr><th>변수</th><th>설명</th><th>기본값</th></tr></thead>
+<tbody>
+<tr><td><code>REQUIRE_JTI</code></td><td>토큰 폐기 지원을 위해 토큰에 JTI 클레임 요구</td><td><code>true</code></td></tr>
+<tr><td><code>REQUIRE_TOKEN_EXPIRATION</code></td><td>토큰에 exp 클레임 요구</td><td><code>true</code></td></tr>
+<tr><td><code>PUBLIC_REGISTRATION_ENABLED</code></td><td>공개 사용자 자가 가입 허용</td><td><code>false</code></td></tr>
+</tbody>
+</table>
+
+<h3>🛡️ 콘텐츠 보안</h3>
+
+<p>콘텐츠 크기 제한은 DoS 공격을 막고 시스템 안정성을 보장합니다.</p>
+
+<table>
+<thead><tr><th>변수</th><th>설명</th><th>기본값</th></tr></thead>
+<tbody>
+<tr><td><code>CONTENT_MAX_RESOURCE_SIZE</code></td><td>리소스 콘텐츠 최대 크기(바이트)</td><td><code>102400</code>(100KB)</td></tr>
+<tr><td><code>CONTENT_MAX_PROMPT_SIZE</code></td><td>프롬프트 템플릿 최대 크기(바이트)</td><td><code>10240</code>(10KB)</td></tr>
+</tbody>
+</table>
+
+<p><mark>참고:</mark> 크기 제한은 새로운 생성/수정 작업에만 적용됩니다. 기존 콘텐츠는 소급해서 검증하지 않습니다.</p>
+
+<h3>🌐 UAID 게이트웨이 간 라우팅 보안</h3>
+
+<h4>UAID 보안 설정</h4>
+
+<p><mark>운영 환경 요구 사항:</mark></p>
+
+<p>게이트웨이 간 UAID 라우팅에는 명시적인 보안 설정이 필요합니다.</p>
+
+<ol>
+<li><mark>도메인 허용 목록 설정:</mark>
+<pre><code class="language-bash">UAID_ALLOWED_DOMAINS=["gateway1.example.com", "gateway2.example.com"]
+</code></pre>
+</li>
+<li><mark>JWT 신뢰 보장:</mark>
+<ul>
+<li>두 게이트웨이 모두 같은 JWT 발급자를 신뢰해야 합니다</li>
+<li>옵션 A: 공유 시크릿(모든 게이트웨이에 같은 <code>JWT_SECRET_KEY</code>)</li>
+<li>옵션 B: 연합 SSO(Google, GitHub, Entra ID)</li>
+</ul>
+</li>
+<li><mark>인증 활성화:</mark>
+<pre><code class="language-bash">AUTH_REQUIRED=true
+UAID_FORWARD_AUTH=true
+</code></pre>
+</li>
+</ol>
+
+<p><mark>인증 흐름:</mark></p>
+
+<p>게이트웨이 간 호출은 <code>Authorization</code> 헤더로 사용자의 bearer 토큰을 전달합니다.<br>
+원격 게이트웨이는 기존 인증 미들웨어로 토큰을 검증하며, RBAC 컨텍스트를 유지합니다.</p>
+
+<p><mark>보안 기능:</mark></p>
+
+<ul>
+<li>✅ 기본값 fail-closed: 허용 목록이 비어 있으면 모든 게이트웨이 간 라우팅을 차단</li>
+<li>✅ Bearer 토큰 전달: 여러 홉에 걸쳐 사용자 인증 유지</li>
+<li>✅ 감사 추적: 출발 게이트웨이와 사용자를 헤더로 추적</li>
+<li>✅ 명확한 오류 메시지: 잘못된 설정을 시작 시점과 런타임에 포착</li>
+</ul>
+
+<p><mark>문제 해결:</mark></p>
+
+<ul>
+<li><mark>"UAID_ALLOWED_DOMAINS not configured" 오류:</mark> .env의 허용 목록에 신뢰하는 도메인을 추가하세요</li>
+<li><mark>원격 게이트웨이에서 401/403:</mark> 두 게이트웨이가 같은 JWT 발급자를 신뢰하는지 확인하세요</li>
+<li><mark>"proceeding without authentication token" 경고:</mark> 인증 미들웨어가 토큰을 <code>request.state.bearer_token</code>으로 추출하는지 확인하세요</li>
+</ul>
+
+<p>자세한 보안 아키텍처는 <code>docs/security/uaid-cross-gateway-auth.md</code>를 참고하세요.</p>
+
+<h3>⚙️ 프로젝트 기본값(개발 환경 설정)</h3>
+
+<p>다음 값은 로컬/개발 환경이 바로 동작하도록 코드 기본값과 다르게 설정되어 있습니다.</p>
+
+<table>
+<thead><tr><th>변수</th><th>설명</th><th>기본값</th></tr></thead>
+<tbody>
+<tr><td><code>HOST</code></td><td>바인드 주소</td><td><code>0.0.0.0</code></td></tr>
+<tr><td><code>MCPGATEWAY_UI_ENABLED</code></td><td>Admin UI 대시보드 활성화</td><td><code>true</code></td></tr>
+<tr><td><code>MCPGATEWAY_ADMIN_API_ENABLED</code></td><td>Admin API 엔드포인트 활성화</td><td><code>true</code></td></tr>
+<tr><td><code>DATABASE_URL</code></td><td>SQLAlchemy 연결 URL</td><td><code>sqlite:///./mcp.db</code></td></tr>
+<tr><td><code>SECURE_COOKIES</code></td><td>HTTP(HTTPS 아님) 개발 환경에서는 <code>false</code>로 설정</td><td><code>false</code></td></tr>
+</tbody>
+</table>
+
+<h3>📚 전체 설정 레퍼런스</h3>
+
+<p>카테고리(인증, 캐싱, SSO, 관측성 등)별로 정리된 300개 이상의 환경 변수 전체 목록은 <mark><a href="https://ibm.github.io/mcp-context-forge/manage/configuration/">설정 레퍼런스</a></mark>를 참고하세요.</p>
+
+<hr>
+
+<h2 id="running">실행</h2>
+
+<h3>빠른 참조</h3>
+
+<table>
+<thead><tr><th>명령</th><th>서버</th><th>포트</th><th>데이터베이스</th><th>사용 사례</th></tr></thead>
+<tbody>
+<tr><td><code>make dev</code></td><td>Uvicorn</td><td><mark>8000</mark></td><td>SQLite</td><td>개발(단일 인스턴스, 자동 리로드)</td></tr>
+<tr><td><code>make serve</code></td><td>Gunicorn</td><td><mark>4444</mark></td><td>SQLite</td><td>운영 단일 노드(멀티 워커)</td></tr>
+<tr><td><code>make serve-ssl</code></td><td>Gunicorn</td><td><mark>4444</mark></td><td>SQLite</td><td>HTTPS를 사용하는 운영 단일 노드</td></tr>
+<tr><td><code>make compose-up</code></td><td>Docker Compose + Nginx</td><td><mark>8080</mark></td><td>PostgreSQL + Redis</td><td>전체 스택(레플리카 3개, 로드 밸런싱)</td></tr>
+<tr><td><code>make compose-sso</code></td><td>Docker Compose + Keycloak</td><td><mark>8080 / 8180</mark></td><td>PostgreSQL + Redis</td><td>로컬 SSO 테스트(Keycloak 프로필)</td></tr>
+<tr><td><code>make testing-up</code></td><td>Docker Compose + Nginx</td><td><mark>8080</mark></td><td>PostgreSQL + Redis</td><td>테스트 환경</td></tr>
+</tbody>
+</table>
+
+<h3>개발 서버(Uvicorn)</h3>
+
+<pre><code class="language-bash">make dev                 # Uvicorn on :8000 with auto-reload and SQLite
+# or
+./run.sh --reload --log debug --workers 2
+</code></pre>
+
+<blockquote>
+<p><code>run.sh</code>는 <code>uvicorn</code>을 감싼 래퍼로, <code>.env</code>를 로드하고, 리로드를 지원하며, 인자를 서버로 전달합니다.</p>
+</blockquote>
+
+<p>주요 플래그:</p>
+
+<table>
+<thead><tr><th>플래그</th><th>용도</th><th>예시</th></tr></thead>
+<tbody>
+<tr><td><code>-e, --env FILE</code></td><td>env 파일 로드</td><td><code>--env prod.env</code></td></tr>
+<tr><td><code>-H, --host</code></td><td>바인드 주소</td><td><code>--host 127.0.0.1</code></td></tr>
+<tr><td><code>-p, --port</code></td><td>수신 포트</td><td><code>--port 8080</code></td></tr>
+<tr><td><code>-w, --workers</code></td><td>gunicorn 워커 수</td><td><code>--workers 4</code></td></tr>
+<tr><td><code>-r, --reload</code></td><td>자동 리로드</td><td><code>--reload</code></td></tr>
+</tbody>
+</table>
+
+<h3>운영 서버(Gunicorn)</h3>
+
+<pre><code class="language-bash">make serve               # Gunicorn on :4444 with multiple workers
+make serve-ssl           # Gunicorn behind HTTPS on :4444 (uses ./certs)
+</code></pre>
+
+<h3>Docker Compose(전체 스택)</h3>
+
+<pre><code class="language-bash">make compose-up          # Start full stack: PostgreSQL, Redis, 3 gateway replicas, Nginx on :8080
+make compose-sso         # Start SSO stack with Keycloak on :8180
+make sso-test-login      # Run SSO smoke checks (providers + login URL + test users)
+make compose-logs        # Tail logs from all services
+make compose-down        # Stop the stack
+</code></pre>
+
+<h3>수동 실행(Uvicorn)</h3>
+
+<pre><code class="language-bash">uvicorn mcpgateway.main:app --host 0.0.0.0 --port 4444 --workers 4
+</code></pre>
+
+<hr>
+
+<h2 id="cloud-deployment">클라우드 배포</h2>
+
+<p>ContextForge는 주요 클라우드 플랫폼 어디에나 배포할 수 있습니다.</p>
+
+<table>
+<thead><tr><th>플랫폼</th><th>가이드</th></tr></thead>
+<tbody>
+<tr><td><mark>AWS</mark></td><td><a href="https://ibm.github.io/mcp-context-forge/deployment/aws/">ECS/EKS 배포</a></td></tr>
+<tr><td><mark>Azure</mark></td><td><a href="https://ibm.github.io/mcp-context-forge/deployment/azure/">AKS 배포</a></td></tr>
+<tr><td><mark>Google Cloud</mark></td><td><a href="https://ibm.github.io/mcp-context-forge/deployment/google-cloud-run/">Cloud Run</a></td></tr>
+<tr><td><mark>IBM Cloud</mark></td><td><a href="https://ibm.github.io/mcp-context-forge/deployment/ibm-code-engine/">Code Engine</a></td></tr>
+<tr><td><mark>Kubernetes</mark></td><td><a href="https://ibm.github.io/mcp-context-forge/deployment/minikube/">Helm 차트</a></td></tr>
+<tr><td><mark>OpenShift</mark></td><td><a href="https://ibm.github.io/mcp-context-forge/deployment/openshift/">OpenShift 배포</a></td></tr>
+</tbody>
+</table>
+
+<p>자세한 배포 가이드는 <mark><a href="https://ibm.github.io/mcp-context-forge/deployment/">배포 문서</a></mark>를 참고하세요.</p>
+
+<hr>
+
+<h2 id="api-reference">API 레퍼런스</h2>
+
+<p>서버가 실행 중일 때 대화형 API 문서를 사용할 수 있습니다.</p>
+
+<ul>
+<li><mark><a href="http://localhost:4444/docs">Swagger UI</a></mark> — 브라우저에서 바로 API 호출을 시도해 볼 수 있습니다</li>
+<li><mark><a href="http://localhost:4444/redoc">ReDoc</a></mark> — 전체 엔드포인트 레퍼런스를 살펴볼 수 있습니다</li>
+</ul>
+
+<p><mark>빠른 인증:</mark></p>
+<pre><code class="language-bash"># Read JWT_SECRET_KEY from your .env (it must already contain a real secret)
+export JWT_SECRET_KEY=$(grep '^JWT_SECRET_KEY=' .env | cut -d= -f2)
+
+# Generate a JWT token
+export TOKEN=$(python3 -m mcpgateway.utils.create_jwt_token \
+  --username admin@example.com --exp 10080 --secret "$JWT_SECRET_KEY")
+
+# Test API access
+curl -H "Authorization: Bearer $TOKEN" http://localhost:4444/health
+</code></pre>
+
+<p>모든 엔드포인트를 다루는 curl 예시는 <mark><a href="https://ibm.github.io/mcp-context-forge/manage/api-usage/">API 사용 가이드</a></mark>를 참고하세요.</p>
+
+<hr>
+
+<h2 id="testing">테스트</h2>
+
+<pre><code class="language-bash">make test            # Run unit tests
+make lint            # Run all linters
+make doctest         # Run doctests
+make coverage        # Generate coverage report
+</code></pre>
+
+<p>문서 테스트에 대한 자세한 내용은 <a href="https://ibm.github.io/mcp-context-forge/development/doctest-coverage/">Doctest 커버리지 가이드</a>를 참고하세요.</p>
+
+<hr>
+
+<h2 id="project-structure">프로젝트 구조</h2>
+
+<pre><code>mcpgateway/          # Core FastAPI application
+├── main.py          # Entry point
+├── config.py        # Pydantic Settings configuration
+├── db.py            # SQLAlchemy ORM models
+├── schemas.py       # Pydantic validation schemas
+├── services/        # Business logic layer (50+ services)
+├── routers/         # HTTP endpoint definitions
+├── middleware/      # Cross-cutting concerns
+└── transports/      # SSE, WebSocket, stdio, streamable HTTP
+
+tests/               # Test suite (7,000+ tests)
+docs/docs/           # Full documentation (MkDocs)
+charts/              # Kubernetes/Helm charts
+plugins/             # Plugin framework and implementations
+</code></pre>
+
+<blockquote>
+<p><mark>보안:</mark> 신뢰할 수 없는 MCP 서버를 로컬 파일 시스템에서 직접 실행하지 마세요.<br>
+항상 권한이 제한된 샌드박스, 컨테이너 또는 microVM(예: gVisor, Firecracker)을 사용하세요.<br>
+공개 카탈로그의 서버를 포함해 원격 MCP 서버를 등록할 때는 주의하고, 게이트웨이 접근 권한을 부여하기 전에 직접 보안 평가를 수행하세요.</p>
+</blockquote>
+
+<p>전체 구조는 <a href="./CONTRIBUTING.md">CONTRIBUTING.md</a>를 참고하거나 <code>tree -L 2</code>를 실행하세요.</p>
+
+<hr>
+
+<h2 id="development">개발</h2>
+
+<pre><code class="language-bash">make dev             # Dev server with auto-reload (:8000)
+make test            # Run test suite
+make lint            # Run all linters
+make coverage        # Generate coverage report
+</code></pre>
+
+<p>사용 가능한 모든 타깃을 보려면 <code>make</code>를 실행하세요.</p>
+
+<p>개발 워크플로는 다음을 참고하세요.</p>
+<ul>
+<li><mark><a href="https://ibm.github.io/mcp-context-forge/development/developer-workstation/">개발자 워크스테이션 설정</a></mark></li>
+<li><mark><a href="https://ibm.github.io/mcp-context-forge/development/building/">빌드와 패키징</a></mark></li>
+</ul>
+
+<hr>
+
+<h2 id="troubleshooting">문제 해결</h2>
+
+<p>자주 발생하는 문제와 해결 방법:</p>
+
+<table>
+<thead><tr><th>문제</th><th>빠른 해결</th></tr></thead>
+<tbody>
+<tr><td><code>docker compose up</code>이 <code>cryptography</code> 또는 의존성 해석 오류로 실패</td><td>로컬 빌드에는 CI가 생성한 wheel 클로저가 필요합니다. <code>docker pull ghcr.io/ibm/mcp-context-forge:latest &amp;&amp; echo 'IMAGE_LOCAL=ghcr.io/ibm/mcp-context-forge:latest' &gt;&gt; .env</code>를 실행한 뒤 다시 시도하세요</td></tr>
+<tr><td><code>docker compose up</code>이 <code>SecurityConfigurationError: jwt_secret_key</code>로 실패</td><td><code>.env</code>가 없거나 <code>__REPLACE_ME__</code> placeholder가 남아 있습니다. <code>cp .env.example .env &amp;&amp; python3 -m mcpgateway.scripts.init_secrets --patch-env .env</code>를 실행하세요</td></tr>
+<tr><td><code>docker compose up</code> 실패 — <code>mcpgateway/nginx-cache</code> pull 접근 거부</td><td>nginx 이미지는 로컬에서 빌드해야 합니다: <code>docker compose build nginx</code></td></tr>
+<tr><td><code>make dev</code> — 포트 8000에 아무것도 없음</td><td>터미널에서 <code>SecurityConfigurationError</code>를 확인하세요 — <code>make ensure-secrets</code>를 실행한 뒤 다시 시도합니다. WSL2에서는 <code>localhost</code>가 아니라 <code>http://127.0.0.1:8000</code>을 사용하세요</td></tr>
+<tr><td>macOS에서 SQLite "disk I/O error"</td><td>iCloud와 동기화되는 디렉터리를 피하고 <code>~/mcp-context-forge/data</code>를 사용하세요</td></tr>
+<tr><td>WSL2에서 포트 4444에 접근할 수 없음</td><td>Docker Desktop에서 WSL 통합을 설정하세요</td></tr>
+<tr><td>게이트웨이가 즉시 종료됨</td><td><code>cp .env.example .env &amp;&amp; python3 -m mcpgateway.scripts.init_secrets --patch-env .env</code>를 실행하세요</td></tr>
+<tr><td><code>ModuleNotFoundError</code></td><td><code>make install-dev</code>를 실행하세요</td></tr>
+</tbody>
+</table>
+
+<p>자세한 문제 해결 가이드는 <mark><a href="https://ibm.github.io/mcp-context-forge/manage/troubleshooting/">문제 해결 문서</a></mark>를 참고하세요.</p>
+
+<hr>
+
+<h2 id="contributing">기여하기</h2>
+
+<ol>
+<li>저장소를 fork하고 기능 브랜치를 만듭니다.</li>
+<li><code>make lint</code>를 실행하고 문제를 모두 수정합니다.</li>
+<li><code>make test</code>가 통과하는 상태를 유지합니다.</li>
+<li>서명된 커밋(<code>git commit -s</code>)으로 PR을 엽니다.</li>
+</ol>
+
+<p>전체 가이드라인은 <mark><a href="CONTRIBUTING.md">CONTRIBUTING.md</a></mark>를, 버그 제보·기능 요청·작업할 이슈 찾기는 <mark><a href="https://github.com/IBM/mcp-context-forge/issues/2502">이슈 가이드 #2502</a></mark>를 참고하세요.</p>
+
+<hr>
+
+<h2>변경 이력</h2>
+
+<p>전체 변경 이력은 여기에서 볼 수 있습니다: <a href="./CHANGELOG.md">CHANGELOG.md</a></p>
+
+<h2>라이선스</h2>
+
+<p><mark>Apache License 2.0</mark>에 따라 라이선스가 부여됩니다 - <a href="./LICENSE">LICENSE</a> 참고</p>
+
+      </article>
+    </main>
+  </div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var article = document.querySelector('article');
+
+  // Theme Toggle
+  document.getElementById('theme-toggle').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  });
+
+  // Heading Anchor: id 없는 제목에 id 부여, 중복 제거
+  var used = {};
+  article.querySelectorAll('[id]').forEach(function (el) { used[el.id] = true; });
+  var headings = article.querySelectorAll('h1, h2, h3, h4, h5, h6');
+  headings.forEach(function (h) {
+    if (h.id) return;
+    var base = h.textContent.trim().toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-') || 'section';
+    var id = base, n = 1;
+    while (used[id]) id = base + '-' + n++;
+    used[id] = true;
+    h.id = id;
+  });
+
+  // TOC Navigation (H2, H3)
+  var list = document.querySelector('.toc ul');
+  var links = {};
+  var tocHeadings = article.querySelectorAll('h2, h3');
+  tocHeadings.forEach(function (h) {
+    var li = document.createElement('li');
+    li.className = 'lvl-' + h.tagName[1];
+    var a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    li.appendChild(a);
+    list.appendChild(li);
+    links[h.id] = a;
+  });
+  if (!tocHeadings.length) document.querySelector('.toc').style.display = 'none';
+  var details = document.querySelector('.toc details');
+  if (matchMedia('(max-width: 768px)').matches) details.removeAttribute('open');
+  list.addEventListener('click', function (e) {
+    if (e.target.tagName === 'A' && matchMedia('(max-width: 768px)').matches) details.removeAttribute('open');
+  });
+  if ('IntersectionObserver' in window) {
+    var current = null;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        if (current) current.classList.remove('active');
+        current = links[en.target.id];
+        if (current) current.classList.add('active');
+      });
+    }, { rootMargin: '-60px 0px -70% 0px' });
+    tocHeadings.forEach(function (h) { io.observe(h); });
+  }
+
+  // Tables: 가로 스크롤 래퍼
+  article.querySelectorAll('table').forEach(function (t) {
+    var w = document.createElement('div');
+    w.className = 'table-wrap';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+
+  // Code Copy
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok ? Promise.resolve() : Promise.reject();
+  }
+  article.querySelectorAll('pre').forEach(function (pre) {
+    var wrap = document.createElement('div');
+    wrap.className = 'code-wrap';
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', function () {
+      var text = pre.innerText;
+      var p = navigator.clipboard && window.isSecureContext
+        ? navigator.clipboard.writeText(text).catch(function () { return fallbackCopy(text); })
+        : fallbackCopy(text);
+      p.then(function () { btn.textContent = 'Copied!'; }, function () { btn.textContent = '복사 실패'; })
+       .then(function () { setTimeout(function () { btn.textContent = 'Copy'; }, 1500); });
+    });
+    wrap.appendChild(btn);
+  });
+})();
+</script>
+</body>
+</html>
